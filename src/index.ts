@@ -2,6 +2,7 @@ import {action, computed, observable} from 'mobx';
 
 // R - Result of validation
 // V - Type of validated value
+// T - Type of interface with form fields
 
 type Validation<R> = (value: any) => R | Promise<R>;
 type ValidationError = string;
@@ -58,35 +59,23 @@ export class Rule<R> implements IRule<R> {
   }
 }
 
-interface IValidationsCollection extends Array<IRule<any>> {
-  add<R>(validation: Validation<R>): IRule<R>;
+interface IRulesOwner {
+  readonly rules: Array<IRule<any>>;
 }
 
-export class ValidationsCollection extends Array<IRule<any>> implements IValidationsCollection {
-  public add<R>(validation: Validation<R>): IRule<R> {
-    const vi = new Rule(validation);
-    this.push(vi);
-    return vi;
-  }
-}
-
-interface IValidationsOwner {
-  readonly validations: IValidationsCollection;
-}
-
-export interface IValueValidator extends IValidationsOwner {
+export interface IValueValidator extends IRulesOwner {
   validate(input: any): Promise<ValidationError[] | undefined>;
 }
 
 export class ValueValidator implements IValueValidator {
-  public readonly validations: IValidationsCollection = new ValidationsCollection();
+  public readonly rules: Array<IRule<any>> = [];
 
   public async validate(input: any): Promise<ValidationError[] | undefined> {
     let errors: ValidationError[] | undefined;
-    const promises = this.validations.map(v => v.validation(input));
+    const promises = this.rules.map(v => v.validation(input));
     const results = await Promise.all(promises);
     results.forEach((result, index) => {
-      const v = this.validations[index];
+      const v = this.rules[index];
       const isValid = v.validWhen()(result);
       if (!isValid) {
         const error = v.formatter()(result);
@@ -113,29 +102,12 @@ interface IValidatorOptionsValues {
 
 export type IValidatorOptions = Partial<IValidatorOptionsValues>;
 
-interface IValidationContext {
-  readonly validatorOptions: IValidatorOptionsValues;
-}
-
-interface IValidationContextOptions {
-  validatorOptions?: IValidatorOptionsValues;
-}
-
-export class ValidationContext implements IValidationContext {
-  public validatorOptions: IValidatorOptionsValues;
-
-  constructor(options?: IValidationContextOptions) {
-    options = options || {};
-    this.validatorOptions = options.validatorOptions || defaultValidatorOptions;
-  }
-}
-
 type ValueParser<V> = (inputValue?: string) => V | undefined;
 type ValueFormatter<V> = (value?: V) => string | undefined;
 
 const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
 
-interface IFormField<V> extends IValidationsOwner {
+interface IFormField<V> extends IRulesOwner {
   readonly inputValue?: string;
   readonly parsedValue?: V;
   readonly formattedValue?: string;
@@ -211,8 +183,8 @@ export class FormField<V> implements IFormField<V> {
   }
 
   @computed
-  public get validations() {
-    return this._valueValidator.validations;
+  public get rules() {
+    return this._valueValidator.rules;
   }
 
   public setInputValue(inputValue?: string) {

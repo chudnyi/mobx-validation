@@ -29,24 +29,17 @@ export class Rule {
         return this;
     }
 }
-export class ValidationsCollection extends Array {
-    add(validation) {
-        const vi = new Rule(validation);
-        this.push(vi);
-        return vi;
-    }
-}
 export class ValueValidator {
     constructor() {
-        this.validations = new ValidationsCollection();
+        this.rules = [];
     }
     validate(input) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             let errors;
-            const promises = this.validations.map(v => v.validation(input));
+            const promises = this.rules.map(v => v.validation(input));
             const results = yield Promise.all(promises);
             results.forEach((result, index) => {
-                const v = this.validations[index];
+                const v = this.rules[index];
                 const isValid = v.validWhen()(result);
                 if (!isValid) {
                     const error = v.formatter()(result);
@@ -58,12 +51,6 @@ export class ValueValidator {
             });
             return errors;
         });
-    }
-}
-export class ValidationContext {
-    constructor(options) {
-        options = options || {};
-        this.validatorOptions = options.validatorOptions || defaultValidatorOptions;
     }
 }
 const defaultValueFormatter = value => value ? value.toString() : undefined;
@@ -127,8 +114,8 @@ export class FormField {
     get firstErrorAsArray() {
         return this._errors && this._errors.length ? [this._errors[0]] : undefined;
     }
-    get validations() {
-        return this._valueValidator.validations;
+    get rules() {
+        return this._valueValidator.rules;
     }
     setInputValue(inputValue) {
         this._inputValue = inputValue;
@@ -216,7 +203,7 @@ tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "validations", null);
+], FormField.prototype, "rules", null);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),

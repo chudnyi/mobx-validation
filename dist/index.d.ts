@@ -20,20 +20,14 @@ export declare class Rule<R> implements IRule<R> {
     validWhen(): ValidWhen<R>;
     validWhen(fn: ValidWhen<R>): IRule<R>;
 }
-interface IValidationsCollection extends Array<IRule<any>> {
-    add<R>(validation: Validation<R>): IRule<R>;
+interface IRulesOwner {
+    readonly rules: Array<IRule<any>>;
 }
-export declare class ValidationsCollection extends Array<IRule<any>> implements IValidationsCollection {
-    add<R>(validation: Validation<R>): IRule<R>;
-}
-interface IValidationsOwner {
-    readonly validations: IValidationsCollection;
-}
-export interface IValueValidator extends IValidationsOwner {
+export interface IValueValidator extends IRulesOwner {
     validate(input: any): Promise<ValidationError[] | undefined>;
 }
 export declare class ValueValidator implements IValueValidator {
-    readonly validations: IValidationsCollection;
+    readonly rules: Array<IRule<any>>;
     validate(input: any): Promise<ValidationError[] | undefined>;
 }
 interface IValidatorOptionsValues {
@@ -45,19 +39,9 @@ interface IValidatorOptionsValues {
     readonly hideErrorsOnBlur: boolean;
 }
 export declare type IValidatorOptions = Partial<IValidatorOptionsValues>;
-interface IValidationContext {
-    readonly validatorOptions: IValidatorOptionsValues;
-}
-interface IValidationContextOptions {
-    validatorOptions?: IValidatorOptionsValues;
-}
-export declare class ValidationContext implements IValidationContext {
-    validatorOptions: IValidatorOptionsValues;
-    constructor(options?: IValidationContextOptions);
-}
 declare type ValueParser<V> = (inputValue?: string) => V | undefined;
 declare type ValueFormatter<V> = (value?: V) => string | undefined;
-interface IFormField<V> extends IValidationsOwner {
+interface IFormField<V> extends IRulesOwner {
     readonly inputValue?: string;
     readonly parsedValue?: V;
     readonly formattedValue?: string;
@@ -91,7 +75,7 @@ export declare class FormField<V> implements IFormField<V> {
     readonly errors: ValidationError[] | undefined;
     readonly firstError: ValidationError | undefined;
     readonly firstErrorAsArray: [ValidationError] | undefined;
-    readonly validations: IValidationsCollection;
+    readonly rules: IRule<any>[];
     setInputValue(inputValue?: string): void;
     validate(): Promise<V | undefined>;
     clearErrors(): void;
