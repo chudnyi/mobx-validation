@@ -1,0 +1,16 @@
+{
+  "name": "mobx-validation",
+  "version": "0.1.0",
+  "description": "Mobx based forms validation engine writen with TypeScript",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "validation",
+    "mobx",
+    "typescript"
+  ],
+  "author": "Dmitriy Chudnyi",
+  "license": "ISC"
+}
