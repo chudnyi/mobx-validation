@@ -3,6 +3,5 @@ npm-debug.*
 temp.*
 .temp
 build
-dist
 **/.DS_Store
 .idea
