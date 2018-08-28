@@ -2,9 +2,15 @@
   "name": "mobx-validation",
   "version": "0.1.0",
   "description": "Mobx based forms validation engine writen with TypeScript",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chudnyi/mobx-validation.git"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "./node_modules/.bin/tsc -p ."
   },
   "keywords": [
     "validation",
@@ -12,5 +18,13 @@
     "typescript"
   ],
   "author": "Dmitriy Chudnyi",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "tslib": "^1.9.3",
+    "tslint": "^5.11.0",
+    "typescript": "^3.0.1"
+  },
+  "peerDependencies": {
+    "mobx": "*"
+  }
 }

@@ -3,6 +3,7 @@ node_modules/
 npm-debug.*
 temp.*
 build
+dist
 
 android/**/*.iml
 android/.gradle
