@@ -2,7 +2,8 @@ import * as tslib_1 from "tslib";
 import { action, computed, observable } from 'mobx';
 const defaultErrorFormatter = (result) => result;
 const defaultValidWhen = (result) => !result;
-export const defaultValidatorOptions = {
+const defaultValueFormatter = value => value ? value.toString() : undefined;
+export const defaultValidationOptions = {
     validateOnChange: false,
     validateOnFocus: false,
     validateOnBlur: false,
@@ -33,10 +34,10 @@ export class ValueValidator {
     constructor() {
         this.rules = [];
     }
-    validate(input) {
+    validate(inputValue) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             let errors;
-            const promises = this.rules.map(v => v.validation(input));
+            const promises = this.rules.map(v => v.validation(inputValue));
             const results = yield Promise.all(promises);
             results.forEach((result, index) => {
                 const v = this.rules[index];
@@ -53,9 +54,8 @@ export class ValueValidator {
         });
     }
 }
-const defaultValueFormatter = value => value ? value.toString() : undefined;
-export class FormField {
-    constructor(_options = defaultValidatorOptions) {
+export class Field {
+    constructor(_options = defaultValidationOptions) {
         this._options = _options;
         // not valid by default
         this._errors = [];
@@ -147,90 +147,90 @@ export class FormField {
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", String)
-], FormField.prototype, "_inputValue", void 0);
+], Field.prototype, "_inputValue", void 0);
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", Array)
-], FormField.prototype, "_errors", void 0);
+], Field.prototype, "_errors", void 0);
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", Boolean)
-], FormField.prototype, "_isErrorsVisible", void 0);
+], Field.prototype, "_isErrorsVisible", void 0);
 tslib_1.__decorate([
     observable.ref,
     tslib_1.__metadata("design:type", Function)
-], FormField.prototype, "_parser", void 0);
+], Field.prototype, "_parser", void 0);
 tslib_1.__decorate([
     observable.ref,
     tslib_1.__metadata("design:type", Function)
-], FormField.prototype, "_formatter", void 0);
+], Field.prototype, "_formatter", void 0);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "inputValue", null);
+], Field.prototype, "inputValue", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "parsedValue", null);
+], Field.prototype, "parsedValue", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "formattedValue", null);
+], Field.prototype, "formattedValue", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Boolean),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "isValid", null);
+], Field.prototype, "isValid", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "errors", null);
+], Field.prototype, "errors", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "firstError", null);
+], Field.prototype, "firstError", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "firstErrorAsArray", null);
+], Field.prototype, "firstErrorAsArray", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormField.prototype, "rules", null);
+], Field.prototype, "rules", null);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),
     tslib_1.__metadata("design:paramtypes", []),
     tslib_1.__metadata("design:returntype", void 0)
-], FormField.prototype, "clearErrors", null);
+], Field.prototype, "clearErrors", null);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),
     tslib_1.__metadata("design:paramtypes", []),
     tslib_1.__metadata("design:returntype", void 0)
-], FormField.prototype, "hideErrors", null);
+], Field.prototype, "hideErrors", null);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Object)
-], FormField.prototype, "onFocus", void 0);
+], Field.prototype, "onFocus", void 0);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Object)
-], FormField.prototype, "onBlur", void 0);
+], Field.prototype, "onBlur", void 0);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),
     tslib_1.__metadata("design:paramtypes", [Array]),
     tslib_1.__metadata("design:returntype", void 0)
-], FormField.prototype, "_setErrors", null);
-export class FormValidator {
+], Field.prototype, "_setErrors", null);
+export class Form {
     setFields(fields) {
         this._fields = fields;
     }
@@ -298,14 +298,14 @@ tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormValidator.prototype, "fields", null);
+], Form.prototype, "fields", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], FormValidator.prototype, "isValid", null);
-export class StringField extends FormField {
-    constructor(options = defaultValidatorOptions) {
+], Form.prototype, "isValid", null);
+export class StringField extends Field {
+    constructor(options = defaultValidationOptions) {
         super(options);
         this.setValueParser(s => s);
     }

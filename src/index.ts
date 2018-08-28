@@ -1,18 +1,32 @@
-import {action, computed, observable} from 'mobx';
+import { action, computed, observable } from 'mobx';
 
 // R - Result of validation
 // V - Type of validated value
 // T - Type of interface with form fields
 
-type Validation<R> = (value: any) => R | Promise<R>;
 type ValidationError = string;
+type Validation<R> = (inputValue: any) => R | Promise<R>;
 type ErrorFormatter<R> = (result: R) => ValidationError;
 type ValidWhen<R> = (result: R) => boolean;
+type ValueParser<V> = (inputValue?: string) => V | undefined;
+type ValueFormatter<V> = (value?: V) => string | undefined;
 
 const defaultErrorFormatter: ErrorFormatter<any> = (result: any) => result;
 const defaultValidWhen: ValidWhen<any> = (result: any) => !result;
+const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
 
-export const defaultValidatorOptions: IValidatorOptionsValues = {
+export interface IValidationOptions {
+  readonly validateOnChange?: boolean;
+  readonly validateOnFocus?: boolean;
+  readonly validateOnBlur?: boolean;
+  readonly hideErrorsOnChange?: boolean;
+  readonly hideErrorsOnFocus?: boolean;
+  readonly hideErrorsOnBlur?: boolean;
+}
+
+type IValidationOptionsValues = { [P in keyof IValidationOptions]-?: IValidationOptions[P] }
+
+export const defaultValidationOptions: IValidationOptionsValues = {
   validateOnChange: false,
   validateOnFocus: false,
   validateOnBlur: false,
@@ -70,9 +84,9 @@ export interface IValueValidator extends IRulesOwner {
 export class ValueValidator implements IValueValidator {
   public readonly rules: Array<IRule<any>> = [];
 
-  public async validate(input: any): Promise<ValidationError[] | undefined> {
+  public async validate(inputValue: any): Promise<ValidationError[] | undefined> {
     let errors: ValidationError[] | undefined;
-    const promises = this.rules.map(v => v.validation(input));
+    const promises = this.rules.map(v => v.validation(inputValue));
     const results = await Promise.all(promises);
     results.forEach((result, index) => {
       const v = this.rules[index];
@@ -90,24 +104,7 @@ export class ValueValidator implements IValueValidator {
   }
 }
 
-interface IValidatorOptionsValues {
-  readonly validateOnChange: boolean;
-  readonly validateOnFocus: boolean;
-  readonly validateOnBlur: boolean;
-
-  readonly hideErrorsOnChange: boolean;
-  readonly hideErrorsOnFocus: boolean;
-  readonly hideErrorsOnBlur: boolean;
-}
-
-export type IValidatorOptions = Partial<IValidatorOptionsValues>;
-
-type ValueParser<V> = (inputValue?: string) => V | undefined;
-type ValueFormatter<V> = (value?: V) => string | undefined;
-
-const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
-
-interface IFormField<V> extends IRulesOwner {
+interface IField<V> extends IRulesOwner {
   readonly inputValue?: string;
   readonly parsedValue?: V;
   readonly formattedValue?: string;
@@ -129,7 +126,7 @@ interface IFormField<V> extends IRulesOwner {
   setValueFormatter(fn: ValueFormatter<V>): void;
 }
 
-export class FormField<V> implements IFormField<V> {
+export class Field<V> implements IField<V> {
   @observable private _inputValue?: string;
   // not valid by default
   @observable private _errors?: ValidationError[] = [];
@@ -138,7 +135,7 @@ export class FormField<V> implements IFormField<V> {
   @observable.ref private _formatter?: ValueFormatter<V>;
   private _valueValidator = new ValueValidator();
 
-  constructor(private _options: IValidatorOptions = defaultValidatorOptions) {
+  constructor(private _options: IValidationOptions = defaultValidationOptions) {
   }
 
   @computed
@@ -257,9 +254,9 @@ export class FormField<V> implements IFormField<V> {
   }
 }
 
-export type IFormFields<T extends object> = { [P in keyof T]: IFormField<T[P]> };
+type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
 
-export interface IFormValidator<T extends object> {
+export interface IForm<T extends object> {
   readonly fields: IFormFields<T>;
   readonly isValid: boolean;
   validate(): Promise<T | undefined>;
@@ -267,7 +264,7 @@ export interface IFormValidator<T extends object> {
   setFields(fields: IFormFields<T>): void;
 }
 
-export class FormValidator<T extends object> implements IFormValidator<T> {
+export class Form<T extends object> implements IForm<T> {
   private _fields?: IFormFields<T>;
 
   public setFields(fields: IFormFields<T>): void {
@@ -342,8 +339,8 @@ export class FormValidator<T extends object> implements IFormValidator<T> {
   }
 }
 
-export class StringField extends FormField<string> {
-  constructor(options: IValidatorOptions = defaultValidatorOptions) {
+export class StringField extends Field<string> {
+  constructor(options: IValidationOptions = defaultValidationOptions) {
     super(options);
     this.setValueParser(s => s);
   }

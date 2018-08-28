@@ -1,8 +1,21 @@
-declare type Validation<R> = (value: any) => R | Promise<R>;
 declare type ValidationError = string;
+declare type Validation<R> = (inputValue: any) => R | Promise<R>;
 declare type ErrorFormatter<R> = (result: R) => ValidationError;
 declare type ValidWhen<R> = (result: R) => boolean;
-export declare const defaultValidatorOptions: IValidatorOptionsValues;
+declare type ValueParser<V> = (inputValue?: string) => V | undefined;
+declare type ValueFormatter<V> = (value?: V) => string | undefined;
+export interface IValidationOptions {
+    readonly validateOnChange?: boolean;
+    readonly validateOnFocus?: boolean;
+    readonly validateOnBlur?: boolean;
+    readonly hideErrorsOnChange?: boolean;
+    readonly hideErrorsOnFocus?: boolean;
+    readonly hideErrorsOnBlur?: boolean;
+}
+declare type IValidationOptionsValues = {
+    [P in keyof IValidationOptions]-?: IValidationOptions[P];
+};
+export declare const defaultValidationOptions: IValidationOptionsValues;
 interface IRule<R> {
     readonly validation: Validation<R>;
     validWhen(fn: ValidWhen<R>): IRule<R>;
@@ -28,20 +41,9 @@ export interface IValueValidator extends IRulesOwner {
 }
 export declare class ValueValidator implements IValueValidator {
     readonly rules: Array<IRule<any>>;
-    validate(input: any): Promise<ValidationError[] | undefined>;
+    validate(inputValue: any): Promise<ValidationError[] | undefined>;
 }
-interface IValidatorOptionsValues {
-    readonly validateOnChange: boolean;
-    readonly validateOnFocus: boolean;
-    readonly validateOnBlur: boolean;
-    readonly hideErrorsOnChange: boolean;
-    readonly hideErrorsOnFocus: boolean;
-    readonly hideErrorsOnBlur: boolean;
-}
-export declare type IValidatorOptions = Partial<IValidatorOptionsValues>;
-declare type ValueParser<V> = (inputValue?: string) => V | undefined;
-declare type ValueFormatter<V> = (value?: V) => string | undefined;
-interface IFormField<V> extends IRulesOwner {
+interface IField<V> extends IRulesOwner {
     readonly inputValue?: string;
     readonly parsedValue?: V;
     readonly formattedValue?: string;
@@ -59,7 +61,7 @@ interface IFormField<V> extends IRulesOwner {
     setValueParser(fn: ValueParser<V>): void;
     setValueFormatter(fn: ValueFormatter<V>): void;
 }
-export declare class FormField<V> implements IFormField<V> {
+export declare class Field<V> implements IField<V> {
     private _options;
     private _inputValue?;
     private _errors?;
@@ -67,7 +69,7 @@ export declare class FormField<V> implements IFormField<V> {
     private _parser?;
     private _formatter?;
     private _valueValidator;
-    constructor(_options?: IValidatorOptions);
+    constructor(_options?: IValidationOptions);
     readonly inputValue: string | undefined;
     readonly parsedValue: V | undefined;
     readonly formattedValue: string | undefined;
@@ -87,17 +89,17 @@ export declare class FormField<V> implements IFormField<V> {
     setValueParser(fn: ValueParser<V>): void;
     private _setErrors;
 }
-export declare type IFormFields<T extends object> = {
-    [P in keyof T]: IFormField<T[P]>;
+declare type IFormFields<T extends object> = {
+    [P in keyof T]: IField<T[P]>;
 };
-export interface IFormValidator<T extends object> {
+export interface IForm<T extends object> {
     readonly fields: IFormFields<T>;
     readonly isValid: boolean;
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     setFields(fields: IFormFields<T>): void;
 }
-export declare class FormValidator<T extends object> implements IFormValidator<T> {
+export declare class Form<T extends object> implements IForm<T> {
     private _fields?;
     setFields(fields: IFormFields<T>): void;
     readonly fields: IFormFields<T>;
@@ -106,7 +108,7 @@ export declare class FormValidator<T extends object> implements IFormValidator<T
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
 }
-export declare class StringField extends FormField<string> {
-    constructor(options?: IValidatorOptions);
+export declare class StringField extends Field<string> {
+    constructor(options?: IValidationOptions);
 }
 export {};
