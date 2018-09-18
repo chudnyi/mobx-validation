@@ -1,5 +1,5 @@
 import * as tslib_1 from "tslib";
-import { action, computed, observable, autorun } from 'mobx';
+import { action, computed, observable } from 'mobx';
 const defaultErrorFormatter = (result) => result;
 const defaultValidWhen = (result) => !result;
 const defaultValueFormatter = value => value ? value.toString() : undefined;
@@ -61,6 +61,8 @@ export class Field {
         this._errors = [];
         this._isErrorsVisible = false;
         this._valueValidator = new ValueValidator();
+        this._isDirtyValue = false;
+        this._isDirtyInputValue = false;
         this.onChangeText = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (this._options.hideErrorsOnChange) {
                 this.hideErrors();
@@ -86,9 +88,19 @@ export class Field {
                 this.validate().then();
             }
         };
-        autorun(() => {
-            this._updateValueByInputValue();
-        });
+    }
+    _recalculate() {
+        if (this._isDirtyInputValue) {
+            this._inputValue = this.formattedValue;
+            this._isDirtyInputValue = false;
+        }
+        if (this._isDirtyValue) {
+            if (!this._parser) {
+                throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+            }
+            this._value = this._parser(this._inputValue);
+            this._isDirtyValue = false;
+        }
     }
     get inputValue() {
         return this._inputValue;
@@ -96,8 +108,17 @@ export class Field {
     get value() {
         return this._value;
     }
+    setInputValue(inputValue) {
+        this._inputValue = inputValue;
+        this._isDirtyInputValue = false;
+        this._isDirtyValue = true;
+        this._recalculate();
+    }
     setValue(value) {
         this._value = value;
+        this._isDirtyInputValue = true;
+        this._isDirtyValue = false;
+        this._recalculate();
     }
     get formattedValue() {
         return (this._formatter || defaultValueFormatter)(this.value);
@@ -119,9 +140,6 @@ export class Field {
     }
     get rules() {
         return this._valueValidator.rules;
-    }
-    setInputValue(inputValue) {
-        this._inputValue = inputValue;
     }
     validate() {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -145,12 +163,6 @@ export class Field {
     _setErrors(errors) {
         this._errors = errors;
         this._isErrorsVisible = true;
-    }
-    _updateValueByInputValue() {
-        if (!this._parser) {
-            throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
-        }
-        this._value = this._parser(this._inputValue);
     }
 }
 tslib_1.__decorate([
@@ -178,6 +190,12 @@ tslib_1.__decorate([
     tslib_1.__metadata("design:type", Function)
 ], Field.prototype, "_formatter", void 0);
 tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Function),
+    tslib_1.__metadata("design:paramtypes", []),
+    tslib_1.__metadata("design:returntype", void 0)
+], Field.prototype, "_recalculate", null);
+tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
@@ -187,6 +205,12 @@ tslib_1.__decorate([
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
 ], Field.prototype, "value", null);
+tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Function),
+    tslib_1.__metadata("design:paramtypes", [String]),
+    tslib_1.__metadata("design:returntype", void 0)
+], Field.prototype, "setInputValue", null);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),
@@ -312,13 +336,13 @@ export class Form {
             return result;
         });
     }
-    setValues(values) {
+    setValues(values, clear = false) {
         for (const key in this.fields) {
             if (this.fields.hasOwnProperty(key)) {
                 const value = values[key];
-                if (value !== undefined) {
+                if ((value !== undefined && value !== null) || clear) {
                     const field = this.fields[key];
-                    field.setValue(value === null ? undefined : value);
+                    field.setValue(value);
                 }
             }
         }

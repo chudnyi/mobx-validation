@@ -71,9 +71,13 @@ export declare class Field<V> implements IField<V> {
     private _parser?;
     private _formatter?;
     private _valueValidator;
+    private _isDirtyValue;
+    private _isDirtyInputValue;
     constructor(_options?: IValidationOptions);
+    private _recalculate;
     readonly inputValue: string | undefined;
     readonly value: V | undefined;
+    setInputValue(inputValue?: string): void;
     setValue(value: V): void;
     readonly formattedValue: string | undefined;
     readonly isValid: boolean;
@@ -81,7 +85,6 @@ export declare class Field<V> implements IField<V> {
     readonly firstError: ValidationError | undefined;
     readonly firstErrorAsArray: [ValidationError] | undefined;
     readonly rules: IRule<any>[];
-    setInputValue(inputValue?: string): void;
     validate(): Promise<V | undefined>;
     clearErrors(): void;
     hideErrors(): void;
@@ -91,7 +94,6 @@ export declare class Field<V> implements IField<V> {
     setValueFormatter(fn: ValueFormatter<V>): void;
     setValueParser(fn: ValueParser<V>): void;
     private _setErrors;
-    private _updateValueByInputValue;
 }
 declare type IFormFields<T extends object> = {
     [P in keyof T]: IField<T[P]>;
@@ -102,7 +104,7 @@ export interface IForm<T extends object> {
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     setFields(fields: IFormFields<T>): void;
-    setValues(values: T): void;
+    setValues(values: Partial<T>, clear?: boolean): void;
 }
 export declare class Form<T extends object> implements IForm<T> {
     private _fields?;
@@ -112,9 +114,7 @@ export declare class Form<T extends object> implements IForm<T> {
     validatePartial(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
-    setValues(values: {
-        [P in keyof T]: T[P] | undefined | null;
-    }): void;
+    setValues(values: Partial<T>, clear?: boolean): void;
 }
 export declare class StringField extends Field<string> {
     constructor(options?: IValidationOptions);

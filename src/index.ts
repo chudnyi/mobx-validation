@@ -1,4 +1,4 @@
-import {action, computed, observable, autorun} from 'mobx';
+import {action, computed, observable} from 'mobx';
 
 // R - Result of validation
 // V - Type of validated value
@@ -138,9 +138,6 @@ export class Field<V> implements IField<V> {
   private _valueValidator = new ValueValidator();
 
   constructor(private _options: IValidationOptions = defaultValidationOptions) {
-    autorun(() => {
-      this._updateValueByInputValue();
-    });
   }
 
   @computed
@@ -154,8 +151,15 @@ export class Field<V> implements IField<V> {
   }
 
   @action
+  public setInputValue(inputValue?: string) {
+    this._inputValue = inputValue;
+    this._recalculate({value: true});
+  }
+
+  @action
   public setValue(value: V) {
     this._value = value;
+    this._recalculate({inputValue: true});
   }
 
   @computed
@@ -189,10 +193,6 @@ export class Field<V> implements IField<V> {
   @computed
   public get rules() {
     return this._valueValidator.rules;
-  }
-
-  public setInputValue(inputValue?: string) {
-    this._inputValue = inputValue;
   }
 
   public async validate(): Promise<V | undefined> {
@@ -260,11 +260,19 @@ export class Field<V> implements IField<V> {
     this._isErrorsVisible = true;
   }
 
-  private _updateValueByInputValue() {
-    if (!this._parser) {
-      throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+  @action
+  private _recalculate(dirty: { value?: boolean, inputValue?: boolean }) {
+    if (dirty.inputValue) {
+      this._inputValue = this.formattedValue;
     }
-    this._value = this._parser(this._inputValue);
+
+    if (dirty.value) {
+      if (!this._parser) {
+        throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+      }
+
+      this._value = this._parser!(this._inputValue);
+    }
   }
 }
 
@@ -276,7 +284,7 @@ export interface IForm<T extends object> {
   validate(): Promise<T | undefined>;
   validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
   setFields(fields: IFormFields<T>): void;
-  setValues(values: T): void;
+  setValues(values: Partial<T>, clear?: boolean): void;
 }
 
 export class Form<T extends object> implements IForm<T> {
@@ -353,13 +361,13 @@ export class Form<T extends object> implements IForm<T> {
     return result;
   }
 
-  public setValues(values: { [P in keyof T]: T[P] | undefined | null }): void {
+  public setValues(values: Partial<T>, clear: boolean = false): void {
     for (const key in this.fields) {
       if ((this.fields as object).hasOwnProperty(key)) {
         const value = values[key] as any;
-        if (value !== undefined) {
+        if ((value !== undefined && value !== null) || clear) {
           const field = this.fields[key];
-          field.setValue(value === null ? undefined : value);
+          field.setValue(value);
         }
       }
     }
