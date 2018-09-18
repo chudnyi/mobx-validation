@@ -45,7 +45,7 @@ export declare class ValueValidator implements IValueValidator {
 }
 interface IField<V> extends IRulesOwner {
     readonly inputValue?: string;
-    readonly parsedValue?: V;
+    readonly value?: V;
     readonly formattedValue?: string;
     readonly isValid: boolean;
     readonly errors?: ValidationError[];
@@ -54,6 +54,7 @@ interface IField<V> extends IRulesOwner {
     readonly onFocus: () => void;
     readonly onBlur: () => void;
     readonly onChangeText: (inputValue: string) => void;
+    setValue(value: V): void;
     validate(): Promise<V | undefined>;
     setInputValue(inputValue?: string): void;
     clearErrors(): void;
@@ -64,6 +65,7 @@ interface IField<V> extends IRulesOwner {
 export declare class Field<V> implements IField<V> {
     private _options;
     private _inputValue?;
+    private _value?;
     private _errors?;
     private _isErrorsVisible;
     private _parser?;
@@ -71,7 +73,8 @@ export declare class Field<V> implements IField<V> {
     private _valueValidator;
     constructor(_options?: IValidationOptions);
     readonly inputValue: string | undefined;
-    readonly parsedValue: V | undefined;
+    readonly value: V | undefined;
+    setValue(value: V): void;
     readonly formattedValue: string | undefined;
     readonly isValid: boolean;
     readonly errors: ValidationError[] | undefined;
@@ -88,6 +91,7 @@ export declare class Field<V> implements IField<V> {
     setValueFormatter(fn: ValueFormatter<V>): void;
     setValueParser(fn: ValueParser<V>): void;
     private _setErrors;
+    private _updateValueByInputValue;
 }
 declare type IFormFields<T extends object> = {
     [P in keyof T]: IField<T[P]>;
@@ -98,6 +102,7 @@ export interface IForm<T extends object> {
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     setFields(fields: IFormFields<T>): void;
+    setValues(values: T): void;
 }
 export declare class Form<T extends object> implements IForm<T> {
     private _fields?;
@@ -107,6 +112,9 @@ export declare class Form<T extends object> implements IForm<T> {
     validatePartial(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
+    setValues(values: {
+        [P in keyof T]: T[P] | undefined | null;
+    }): void;
 }
 export declare class StringField extends Field<string> {
     constructor(options?: IValidationOptions);

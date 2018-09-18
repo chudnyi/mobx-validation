@@ -1,4 +1,4 @@
-import { action, computed, observable } from 'mobx';
+import {action, computed, observable, autorun} from 'mobx';
 
 // R - Result of validation
 // V - Type of validated value
@@ -24,7 +24,7 @@ export interface IValidationOptions {
   readonly hideErrorsOnBlur?: boolean;
 }
 
-type IValidationOptionsValues = { [P in keyof IValidationOptions]-?: IValidationOptions[P] }
+type IValidationOptionsValues = { [P in keyof IValidationOptions]-?: IValidationOptions[P] };
 
 export const defaultValidationOptions: IValidationOptionsValues = {
   validateOnChange: false,
@@ -106,7 +106,7 @@ export class ValueValidator implements IValueValidator {
 
 interface IField<V> extends IRulesOwner {
   readonly inputValue?: string;
-  readonly parsedValue?: V;
+  readonly value?: V;
   readonly formattedValue?: string;
   readonly isValid: boolean;
   readonly errors?: ValidationError[];
@@ -117,6 +117,7 @@ interface IField<V> extends IRulesOwner {
   readonly onBlur: () => void;
   readonly onChangeText: (inputValue: string) => void;
 
+  setValue(value: V): void;
   validate(): Promise<V | undefined>;
   setInputValue(inputValue?: string): void;
   clearErrors(): void;
@@ -128,6 +129,7 @@ interface IField<V> extends IRulesOwner {
 
 export class Field<V> implements IField<V> {
   @observable private _inputValue?: string;
+  @observable private _value?: V;
   // not valid by default
   @observable private _errors?: ValidationError[] = [];
   @observable private _isErrorsVisible: boolean = false;
@@ -136,6 +138,9 @@ export class Field<V> implements IField<V> {
   private _valueValidator = new ValueValidator();
 
   constructor(private _options: IValidationOptions = defaultValidationOptions) {
+    autorun(() => {
+      this._updateValueByInputValue();
+    });
   }
 
   @computed
@@ -144,16 +149,18 @@ export class Field<V> implements IField<V> {
   }
 
   @computed
-  public get parsedValue(): V | undefined {
-    if (!this._parser) {
-      throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
-    }
-    return this._parser(this._inputValue);
+  public get value(): V | undefined {
+    return this._value;
+  }
+
+  @action
+  public setValue(value: V) {
+    this._value = value;
   }
 
   @computed
   public get formattedValue(): string | undefined {
-    return (this._formatter || defaultValueFormatter)(this.parsedValue);
+    return (this._formatter || defaultValueFormatter)(this.value);
   }
 
   @computed
@@ -192,7 +199,7 @@ export class Field<V> implements IField<V> {
     const errors = await this._valueValidator.validate(this._inputValue);
     this._setErrors(errors);
 
-    return this.isValid ? this.parsedValue : undefined;
+    return this.isValid ? this.value : undefined;
   }
 
   @action
@@ -215,7 +222,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnChange) {
       await this.validate();
     }
-  }
+  };
 
   @action
   public readonly onFocus = (): void => {
@@ -226,7 +233,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnFocus) {
       this.validate().then();
     }
-  }
+  };
 
   @action
   public readonly onBlur = (): void => {
@@ -237,7 +244,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnBlur) {
       this.validate().then();
     }
-  }
+  };
 
   public setValueFormatter(fn: ValueFormatter<V>): void {
     this._formatter = fn;
@@ -252,6 +259,13 @@ export class Field<V> implements IField<V> {
     this._errors = errors;
     this._isErrorsVisible = true;
   }
+
+  private _updateValueByInputValue() {
+    if (!this._parser) {
+      throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+    }
+    this._value = this._parser(this._inputValue);
+  }
 }
 
 type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
@@ -262,6 +276,7 @@ export interface IForm<T extends object> {
   validate(): Promise<T | undefined>;
   validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
   setFields(fields: IFormFields<T>): void;
+  setValues(values: T): void;
 }
 
 export class Form<T extends object> implements IForm<T> {
@@ -336,6 +351,18 @@ export class Form<T extends object> implements IForm<T> {
     }
 
     return result;
+  }
+
+  public setValues(values: { [P in keyof T]: T[P] | undefined | null }): void {
+    for (const key in this.fields) {
+      if ((this.fields as object).hasOwnProperty(key)) {
+        const value = values[key] as any;
+        if (value !== undefined) {
+          const field = this.fields[key];
+          field.setValue(value === null ? undefined : value);
+        }
+      }
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import * as tslib_1 from "tslib";
-import { action, computed, observable } from 'mobx';
+import { action, computed, observable, autorun } from 'mobx';
 const defaultErrorFormatter = (result) => result;
 const defaultValidWhen = (result) => !result;
 const defaultValueFormatter = value => value ? value.toString() : undefined;
@@ -86,18 +86,21 @@ export class Field {
                 this.validate().then();
             }
         };
+        autorun(() => {
+            this._updateValueByInputValue();
+        });
     }
     get inputValue() {
         return this._inputValue;
     }
-    get parsedValue() {
-        if (!this._parser) {
-            throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
-        }
-        return this._parser(this._inputValue);
+    get value() {
+        return this._value;
+    }
+    setValue(value) {
+        this._value = value;
     }
     get formattedValue() {
-        return (this._formatter || defaultValueFormatter)(this.parsedValue);
+        return (this._formatter || defaultValueFormatter)(this.value);
     }
     get isValid() {
         // valid only if errors === undefined
@@ -124,7 +127,7 @@ export class Field {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             const errors = yield this._valueValidator.validate(this._inputValue);
             this._setErrors(errors);
-            return this.isValid ? this.parsedValue : undefined;
+            return this.isValid ? this.value : undefined;
         });
     }
     clearErrors() {
@@ -143,11 +146,21 @@ export class Field {
         this._errors = errors;
         this._isErrorsVisible = true;
     }
+    _updateValueByInputValue() {
+        if (!this._parser) {
+            throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+        }
+        this._value = this._parser(this._inputValue);
+    }
 }
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", String)
 ], Field.prototype, "_inputValue", void 0);
+tslib_1.__decorate([
+    observable,
+    tslib_1.__metadata("design:type", Object)
+], Field.prototype, "_value", void 0);
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", Array)
@@ -173,7 +186,13 @@ tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
     tslib_1.__metadata("design:paramtypes", [])
-], Field.prototype, "parsedValue", null);
+], Field.prototype, "value", null);
+tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Function),
+    tslib_1.__metadata("design:paramtypes", [Object]),
+    tslib_1.__metadata("design:returntype", void 0)
+], Field.prototype, "setValue", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
@@ -292,6 +311,17 @@ export class Form {
             }
             return result;
         });
+    }
+    setValues(values) {
+        for (const key in this.fields) {
+            if (this.fields.hasOwnProperty(key)) {
+                const value = values[key];
+                if (value !== undefined) {
+                    const field = this.fields[key];
+                    field.setValue(value === null ? undefined : value);
+                }
+            }
+        }
     }
 }
 tslib_1.__decorate([
