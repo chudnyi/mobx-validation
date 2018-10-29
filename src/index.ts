@@ -222,7 +222,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnChange) {
       await this.validate();
     }
-  };
+  }
 
   @action
   public readonly onFocus = (): void => {
@@ -233,7 +233,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnFocus) {
       this.validate().then();
     }
-  };
+  }
 
   @action
   public readonly onBlur = (): void => {
@@ -244,7 +244,7 @@ export class Field<V> implements IField<V> {
     if (this._options.validateOnBlur) {
       this.validate().then();
     }
-  };
+  }
 
   public setValueFormatter(fn: ValueFormatter<V>): void {
     this._formatter = fn;
@@ -281,17 +281,37 @@ type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
 export interface IForm<T extends object> {
   readonly fields: IFormFields<T>;
   readonly isValid: boolean;
+  readonly error?: ValidationError | undefined;
   validate(): Promise<T | undefined>;
   validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
   setFields(fields: IFormFields<T>): void;
   setValues(values: Partial<T>, clear?: boolean): void;
+  setError(error: ValidationError): void;
+  clearError(): void;
 }
 
 export class Form<T extends object> implements IForm<T> {
+  @observable private _error?: ValidationError;
   private _fields?: IFormFields<T>;
 
   public setFields(fields: IFormFields<T>): void {
     this._fields = fields;
+  }
+
+  @action
+  public setError(error: ValidationError) {
+    if (!this._fields) { return; }
+    this._error = error;
+  }
+
+  @action
+  public clearError() {
+    this._error = undefined;
+  }
+
+  @computed
+  public get error(): ValidationError | undefined {
+    return this._error;
   }
 
   @computed
