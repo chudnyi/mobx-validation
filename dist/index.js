@@ -1,15 +1,32 @@
 import * as tslib_1 from "tslib";
-import { action, computed, observable } from 'mobx';
+import { action, autorun, computed, observable, untracked } from 'mobx';
 const defaultErrorFormatter = (result) => result;
 const defaultValidWhen = (result) => !result;
 const defaultValueFormatter = value => value ? value.toString() : undefined;
+const defaultFieldEvents = {
+    onChange: (field, inputValue) => {
+        field.hideErrors();
+    },
+    onFocus: field => {
+        // empty
+    },
+    onBlur: field => {
+        field.validate().then();
+    }
+};
+const defaultFormEvents = {
+    onChange: (field, inputValue) => {
+        // empty
+    },
+    onFocus: field => {
+        // empty
+    },
+    onBlur: field => {
+        // empty
+    }
+};
 export const defaultValidationOptions = {
-    validateOnChange: false,
-    validateOnFocus: false,
-    validateOnBlur: false,
-    hideErrorsOnChange: false,
-    hideErrorsOnFocus: false,
-    hideErrorsOnBlur: false
+    events: defaultFieldEvents
 };
 export class Rule {
     constructor(validation) {
@@ -30,77 +47,35 @@ export class Rule {
         return this;
     }
 }
-export class ValueValidator {
-    constructor() {
-        this.rules = [];
-    }
-    validate(inputValue) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            let errors;
-            const promises = this.rules.map(v => v.validation(inputValue));
-            const results = yield Promise.all(promises);
-            results.forEach((result, index) => {
-                const v = this.rules[index];
-                const isValid = v.validWhen()(result);
-                if (!isValid) {
-                    const error = v.formatter()(result);
-                    if (!errors) {
-                        errors = [];
-                    }
-                    errors.push(error);
-                }
-            });
-            return errors;
-        });
-    }
-}
 export class Field {
-    constructor(_options = defaultValidationOptions) {
-        this._options = _options;
+    constructor(options = defaultValidationOptions) {
+        this.rules = [];
         // not valid by default
         this._errors = [];
         this._isErrorsVisible = false;
-        this._valueValidator = new ValueValidator();
-        this._isDirtyValue = false;
-        this._isDirtyInputValue = false;
         this.onChangeText = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
-            if (this._options.hideErrorsOnChange) {
-                this.hideErrors();
-            }
+            this.events.onChange(this);
             this.setInputValue(inputValue);
-            if (this._options.validateOnChange) {
-                yield this.validate();
-            }
         });
         this.onFocus = () => {
-            if (this._options.hideErrorsOnFocus) {
-                this.hideErrors();
-            }
-            if (this._options.validateOnFocus) {
-                this.validate().then();
-            }
+            this.events.onFocus(this);
         };
         this.onBlur = () => {
-            if (this._options.hideErrorsOnBlur) {
-                this.hideErrors();
-            }
-            if (this._options.validateOnBlur) {
-                this.validate().then();
-            }
+            this.events.onBlur(this);
         };
-    }
-    _recalculate() {
-        if (this._isDirtyInputValue) {
-            this._inputValue = this.formattedValue;
-            this._isDirtyInputValue = false;
-        }
-        if (this._isDirtyValue) {
-            if (!this._parser) {
-                throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+        // @ts-ignore
+        this.events = Object.assign({}, defaultValidationOptions.events, options.events);
+        let skipFist = true;
+        autorun(() => tslib_1.__awaiter(this, void 0, void 0, function* () {
+            const inputValue = untracked(() => this._inputValue);
+            const errors = yield this._validateRules(inputValue);
+            if (skipFist) {
+                skipFist = false;
             }
-            this._value = this._parser(this._inputValue);
-            this._isDirtyValue = false;
-        }
+            else {
+                this._setErrors(errors);
+            }
+        }));
     }
     get inputValue() {
         return this._inputValue;
@@ -110,15 +85,11 @@ export class Field {
     }
     setInputValue(inputValue) {
         this._inputValue = inputValue;
-        this._isDirtyInputValue = false;
-        this._isDirtyValue = true;
-        this._recalculate();
+        this._recalculate({ value: true });
     }
     setValue(value) {
         this._value = value;
-        this._isDirtyInputValue = true;
-        this._isDirtyValue = false;
-        this._recalculate();
+        this._recalculate({ inputValue: true });
     }
     get formattedValue() {
         return (this._formatter || defaultValueFormatter)(this.value);
@@ -138,18 +109,16 @@ export class Field {
     get firstErrorAsArray() {
         return this._errors && this._errors.length ? [this._errors[0]] : undefined;
     }
-    get rules() {
-        return this._valueValidator.rules;
-    }
     validate() {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            const errors = yield this._valueValidator.validate(this._inputValue);
+            const errors = yield this._validateRules(this._inputValue);
             this._setErrors(errors);
             return this.isValid ? this.value : undefined;
         });
     }
     clearErrors() {
         this._errors = undefined;
+        this._isErrorsVisible = false;
     }
     hideErrors() {
         this._isErrorsVisible = false;
@@ -164,7 +133,41 @@ export class Field {
         this._errors = errors;
         this._isErrorsVisible = true;
     }
+    _recalculate(dirty) {
+        if (dirty.inputValue) {
+            this._inputValue = this.formattedValue;
+        }
+        if (dirty.value) {
+            if (!this._parser) {
+                throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
+            }
+            this._value = this._parser(this._inputValue);
+        }
+    }
+    _validateRules(inputValue) {
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            let errors;
+            const promises = this.rules.map(v => v.validation(inputValue));
+            const results = yield Promise.all(promises);
+            results.forEach((result, index) => {
+                const v = this.rules[index];
+                const isValid = v.validWhen()(result);
+                if (!isValid) {
+                    const error = v.formatter()(result);
+                    if (!errors) {
+                        errors = [];
+                    }
+                    errors.push(error);
+                }
+            });
+            return errors;
+        });
+    }
 }
+tslib_1.__decorate([
+    observable.shallow,
+    tslib_1.__metadata("design:type", Array)
+], Field.prototype, "rules", void 0);
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", String)
@@ -189,12 +192,6 @@ tslib_1.__decorate([
     observable.ref,
     tslib_1.__metadata("design:type", Function)
 ], Field.prototype, "_formatter", void 0);
-tslib_1.__decorate([
-    action,
-    tslib_1.__metadata("design:type", Function),
-    tslib_1.__metadata("design:paramtypes", []),
-    tslib_1.__metadata("design:returntype", void 0)
-], Field.prototype, "_recalculate", null);
 tslib_1.__decorate([
     computed,
     tslib_1.__metadata("design:type", Object),
@@ -243,11 +240,6 @@ tslib_1.__decorate([
     tslib_1.__metadata("design:paramtypes", [])
 ], Field.prototype, "firstErrorAsArray", null);
 tslib_1.__decorate([
-    computed,
-    tslib_1.__metadata("design:type", Object),
-    tslib_1.__metadata("design:paramtypes", [])
-], Field.prototype, "rules", null);
-tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Function),
     tslib_1.__metadata("design:paramtypes", []),
@@ -273,8 +265,35 @@ tslib_1.__decorate([
     tslib_1.__metadata("design:paramtypes", [Array]),
     tslib_1.__metadata("design:returntype", void 0)
 ], Field.prototype, "_setErrors", null);
+tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Function),
+    tslib_1.__metadata("design:paramtypes", [Object]),
+    tslib_1.__metadata("design:returntype", void 0)
+], Field.prototype, "_recalculate", null);
 export class Form {
+    constructor() {
+        this.events = Object.assign({}, defaultFormEvents);
+    }
     setFields(fields) {
+        forEach(fields, (field) => {
+            field.clearErrors();
+            const onChange = field.events.onChange;
+            field.events.onChange = (f, v) => {
+                onChange(f, v);
+                this.events.onChange(f);
+            };
+            const onFocus = field.events.onFocus;
+            field.events.onFocus = (f) => {
+                onFocus(f);
+                this.events.onFocus(f);
+            };
+            const onBlur = field.events.onBlur;
+            field.events.onBlur = (f) => {
+                onBlur(f);
+                this.events.onBlur(f);
+            };
+        });
         this._fields = fields;
     }
     get fields() {
@@ -362,6 +381,13 @@ export class StringField extends Field {
     constructor(options = defaultValidationOptions) {
         super(options);
         this.setValueParser(s => s);
+    }
+}
+function forEach(obj, cb) {
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            cb(obj[key], key);
+        }
     }
 }
 //# sourceMappingURL=index.js.map

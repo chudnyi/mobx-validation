@@ -4,13 +4,13 @@ declare type ErrorFormatter<R> = (result: R) => ValidationError;
 declare type ValidWhen<R> = (result: R) => boolean;
 declare type ValueParser<V> = (inputValue?: string) => V | undefined;
 declare type ValueFormatter<V> = (value?: V) => string | undefined;
+interface ITriggerEvents {
+    onChange(field: IField<any>, inputValue?: string): void;
+    onFocus(field: IField<any>): void;
+    onBlur(field: IField<any>): void;
+}
 export interface IValidationOptions {
-    readonly validateOnChange?: boolean;
-    readonly validateOnFocus?: boolean;
-    readonly validateOnBlur?: boolean;
-    readonly hideErrorsOnChange?: boolean;
-    readonly hideErrorsOnFocus?: boolean;
-    readonly hideErrorsOnBlur?: boolean;
+    readonly events?: Partial<ITriggerEvents>;
 }
 declare type IValidationOptionsValues = {
     [P in keyof IValidationOptions]-?: IValidationOptions[P];
@@ -36,14 +36,7 @@ export declare class Rule<R> implements IRule<R> {
 interface IRulesOwner {
     readonly rules: Array<IRule<any>>;
 }
-export interface IValueValidator extends IRulesOwner {
-    validate(input: any): Promise<ValidationError[] | undefined>;
-}
-export declare class ValueValidator implements IValueValidator {
-    readonly rules: Array<IRule<any>>;
-    validate(inputValue: any): Promise<ValidationError[] | undefined>;
-}
-interface IField<V> extends IRulesOwner {
+export interface IField<V> extends IRulesOwner {
     readonly inputValue?: string;
     readonly value?: V;
     readonly formattedValue?: string;
@@ -54,6 +47,7 @@ interface IField<V> extends IRulesOwner {
     readonly onFocus: () => void;
     readonly onBlur: () => void;
     readonly onChangeText: (inputValue: string) => void;
+    readonly events: ITriggerEvents;
     setValue(value: V): void;
     validate(): Promise<V | undefined>;
     setInputValue(inputValue?: string): void;
@@ -63,18 +57,15 @@ interface IField<V> extends IRulesOwner {
     setValueFormatter(fn: ValueFormatter<V>): void;
 }
 export declare class Field<V> implements IField<V> {
-    private _options;
+    readonly rules: Array<IRule<any>>;
+    readonly events: ITriggerEvents;
     private _inputValue?;
     private _value?;
     private _errors?;
     private _isErrorsVisible;
     private _parser?;
     private _formatter?;
-    private _valueValidator;
-    private _isDirtyValue;
-    private _isDirtyInputValue;
-    constructor(_options?: IValidationOptions);
-    private _recalculate;
+    constructor(options?: IValidationOptions);
     readonly inputValue: string | undefined;
     readonly value: V | undefined;
     setInputValue(inputValue?: string): void;
@@ -84,7 +75,6 @@ export declare class Field<V> implements IField<V> {
     readonly errors: ValidationError[] | undefined;
     readonly firstError: ValidationError | undefined;
     readonly firstErrorAsArray: [ValidationError] | undefined;
-    readonly rules: IRule<any>[];
     validate(): Promise<V | undefined>;
     clearErrors(): void;
     hideErrors(): void;
@@ -94,6 +84,8 @@ export declare class Field<V> implements IField<V> {
     setValueFormatter(fn: ValueFormatter<V>): void;
     setValueParser(fn: ValueParser<V>): void;
     private _setErrors;
+    private _recalculate;
+    private _validateRules;
 }
 declare type IFormFields<T extends object> = {
     [P in keyof T]: IField<T[P]>;
@@ -101,12 +93,14 @@ declare type IFormFields<T extends object> = {
 export interface IForm<T extends object> {
     readonly fields: IFormFields<T>;
     readonly isValid: boolean;
+    readonly events: ITriggerEvents;
     validate(): Promise<T | undefined>;
     validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
     setFields(fields: IFormFields<T>): void;
     setValues(values: Partial<T>, clear?: boolean): void;
 }
 export declare class Form<T extends object> implements IForm<T> {
+    readonly events: ITriggerEvents;
     private _fields?;
     setFields(fields: IFormFields<T>): void;
     readonly fields: IFormFields<T>;
