@@ -1,6 +1,6 @@
 {
   "name": "mobx-validation",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Mobx based forms validation engine writen with TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
