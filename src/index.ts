@@ -1,4 +1,4 @@
-import {action, computed, observable} from 'mobx';
+import { action, autorun, computed, observable, untracked } from 'mobx';
 
 // R - Result of validation
 // V - Type of validated value
@@ -15,24 +15,44 @@ const defaultErrorFormatter: ErrorFormatter<any> = (result: any) => result;
 const defaultValidWhen: ValidWhen<any> = (result: any) => !result;
 const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
 
+interface ITriggerEvents {
+  onChange(field: IField<any>, inputValue?: string): void;
+  onFocus(field: IField<any>): void;
+  onBlur(field: IField<any>): void;
+}
+
 export interface IValidationOptions {
-  readonly validateOnChange?: boolean;
-  readonly validateOnFocus?: boolean;
-  readonly validateOnBlur?: boolean;
-  readonly hideErrorsOnChange?: boolean;
-  readonly hideErrorsOnFocus?: boolean;
-  readonly hideErrorsOnBlur?: boolean;
+  readonly events?: Partial<ITriggerEvents>;
 }
 
 type IValidationOptionsValues = { [P in keyof IValidationOptions]-?: IValidationOptions[P] };
 
+const defaultFieldEvents: ITriggerEvents = {
+  onChange: (field, inputValue) => {
+    field.hideErrors();
+  },
+  onFocus: field => {
+    // empty
+  },
+  onBlur: field => {
+    field.validate().then();
+  }
+};
+
+const defaultFormEvents: ITriggerEvents = {
+  onChange: (field, inputValue) => {
+    // empty
+  },
+  onFocus: field => {
+    // empty
+  },
+  onBlur: field => {
+    // empty
+  }
+};
+
 export const defaultValidationOptions: IValidationOptionsValues = {
-  validateOnChange: false,
-  validateOnFocus: false,
-  validateOnBlur: false,
-  hideErrorsOnChange: false,
-  hideErrorsOnFocus: false,
-  hideErrorsOnBlur: false
+  events: defaultFieldEvents
 };
 
 interface IRule<R> {
@@ -77,34 +97,7 @@ interface IRulesOwner {
   readonly rules: Array<IRule<any>>;
 }
 
-export interface IValueValidator extends IRulesOwner {
-  validate(input: any): Promise<ValidationError[] | undefined>;
-}
-
-export class ValueValidator implements IValueValidator {
-  public readonly rules: Array<IRule<any>> = [];
-
-  public async validate(inputValue: any): Promise<ValidationError[] | undefined> {
-    let errors: ValidationError[] | undefined;
-    const promises = this.rules.map(v => v.validation(inputValue));
-    const results = await Promise.all(promises);
-    results.forEach((result, index) => {
-      const v = this.rules[index];
-      const isValid = v.validWhen()(result);
-      if (!isValid) {
-        const error = v.formatter()(result);
-        if (!errors) {
-          errors = [];
-        }
-        errors.push(error);
-      }
-    });
-
-    return errors;
-  }
-}
-
-interface IField<V> extends IRulesOwner {
+export interface IField<V> extends IRulesOwner {
   readonly inputValue?: string;
   readonly value?: V;
   readonly formattedValue?: string;
@@ -117,6 +110,8 @@ interface IField<V> extends IRulesOwner {
   readonly onBlur: () => void;
   readonly onChangeText: (inputValue: string) => void;
 
+  readonly events: ITriggerEvents;
+
   setValue(value: V): void;
   validate(): Promise<V | undefined>;
   setInputValue(inputValue?: string): void;
@@ -128,6 +123,8 @@ interface IField<V> extends IRulesOwner {
 }
 
 export class Field<V> implements IField<V> {
+  @observable.shallow public readonly rules: Array<IRule<any>> = [];
+  public readonly events: ITriggerEvents;
   @observable private _inputValue?: string;
   @observable private _value?: V;
   // not valid by default
@@ -135,9 +132,22 @@ export class Field<V> implements IField<V> {
   @observable private _isErrorsVisible: boolean = false;
   @observable.ref private _parser?: ValueParser<V>;
   @observable.ref private _formatter?: ValueFormatter<V>;
-  private _valueValidator = new ValueValidator();
 
-  constructor(private _options: IValidationOptions = defaultValidationOptions) {
+  constructor(options: IValidationOptions = defaultValidationOptions) {
+    // @ts-ignore
+    this.events = { ...defaultValidationOptions.events, ...options.events };
+
+    let skipFist = true;
+    autorun(async () => {
+      const inputValue = untracked(() => this._inputValue);
+      const errors = await this._validateRules(inputValue);
+
+      if (skipFist) {
+        skipFist = false;
+      } else {
+        this._setErrors(errors);
+      }
+    });
   }
 
   @computed
@@ -153,13 +163,13 @@ export class Field<V> implements IField<V> {
   @action
   public setInputValue(inputValue?: string) {
     this._inputValue = inputValue;
-    this._recalculate({value: true});
+    this._recalculate({ value: true });
   }
 
   @action
   public setValue(value: V) {
     this._value = value;
-    this._recalculate({inputValue: true});
+    this._recalculate({ inputValue: true });
   }
 
   @computed
@@ -190,13 +200,8 @@ export class Field<V> implements IField<V> {
     return this._errors && this._errors.length ? [this._errors[0]] : undefined;
   }
 
-  @computed
-  public get rules() {
-    return this._valueValidator.rules;
-  }
-
   public async validate(): Promise<V | undefined> {
-    const errors = await this._valueValidator.validate(this._inputValue);
+    const errors = await this._validateRules(this._inputValue);
     this._setErrors(errors);
 
     return this.isValid ? this.value : undefined;
@@ -205,6 +210,7 @@ export class Field<V> implements IField<V> {
   @action
   public clearErrors(): void {
     this._errors = undefined;
+    this._isErrorsVisible = false;
   }
 
   @action
@@ -213,38 +219,19 @@ export class Field<V> implements IField<V> {
   }
 
   public readonly onChangeText = async (inputValue: string) => {
-    if (this._options.hideErrorsOnChange) {
-      this.hideErrors();
-    }
-
+    this.events.onChange(this);
     this.setInputValue(inputValue);
-
-    if (this._options.validateOnChange) {
-      await this.validate();
-    }
-  };
+  }
 
   @action
   public readonly onFocus = (): void => {
-    if (this._options.hideErrorsOnFocus) {
-      this.hideErrors();
-    }
-
-    if (this._options.validateOnFocus) {
-      this.validate().then();
-    }
-  };
+    this.events.onFocus(this);
+  }
 
   @action
   public readonly onBlur = (): void => {
-    if (this._options.hideErrorsOnBlur) {
-      this.hideErrors();
-    }
-
-    if (this._options.validateOnBlur) {
-      this.validate().then();
-    }
-  };
+    this.events.onBlur(this);
+  }
 
   public setValueFormatter(fn: ValueFormatter<V>): void {
     this._formatter = fn;
@@ -274,6 +261,25 @@ export class Field<V> implements IField<V> {
       this._value = this._parser!(this._inputValue);
     }
   }
+
+  private async _validateRules(inputValue: any): Promise<ValidationError[] | undefined> {
+    let errors: ValidationError[] | undefined;
+    const promises = this.rules.map(v => v.validation(inputValue));
+    const results = await Promise.all(promises);
+    results.forEach((result, index) => {
+      const v = this.rules[index];
+      const isValid = v.validWhen()(result);
+      if (!isValid) {
+        const error = v.formatter()(result);
+        if (!errors) {
+          errors = [];
+        }
+        errors.push(error);
+      }
+    });
+
+    return errors;
+  }
 }
 
 type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
@@ -281,6 +287,8 @@ type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
 export interface IForm<T extends object> {
   readonly fields: IFormFields<T>;
   readonly isValid: boolean;
+  readonly events: ITriggerEvents;
+
   validate(): Promise<T | undefined>;
   validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
   setFields(fields: IFormFields<T>): void;
@@ -288,9 +296,32 @@ export interface IForm<T extends object> {
 }
 
 export class Form<T extends object> implements IForm<T> {
+  public readonly events: ITriggerEvents = { ...defaultFormEvents };
   private _fields?: IFormFields<T>;
 
   public setFields(fields: IFormFields<T>): void {
+    forEach(fields, (field: IField<any>) => {
+      field.clearErrors();
+
+      const onChange = field.events.onChange;
+      field.events.onChange = (f, v) => {
+        onChange(f, v);
+        this.events.onChange(f);
+      };
+
+      const onFocus = field.events.onFocus;
+      field.events.onFocus = (f) => {
+        onFocus(f);
+        this.events.onFocus(f);
+      };
+
+      const onBlur = field.events.onBlur;
+      field.events.onBlur = (f) => {
+        onBlur(f);
+        this.events.onBlur(f);
+      };
+    });
+
     this._fields = fields;
   }
 
@@ -378,5 +409,13 @@ export class StringField extends Field<string> {
   constructor(options: IValidationOptions = defaultValidationOptions) {
     super(options);
     this.setValueParser(s => s);
+  }
+}
+
+function forEach<T extends object>(obj: T, cb: (value: any, key?: keyof T) => void) {
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      cb(obj[key], key);
+    }
   }
 }
