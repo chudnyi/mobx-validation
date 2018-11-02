@@ -1,6 +1,6 @@
 {
   "name": "mobx-validation",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Mobx based forms validation engine writen with TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,13 @@
   "keywords": [
     "validation",
     "mobx",
-    "typescript"
+    "typescript",
+    "forms",
+    "text",
+    "number",
+    "input",
+    "parse",
+    "format"
   ],
   "author": "Dmitriy Chudnyi",
   "license": "ISC",

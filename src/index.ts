@@ -15,10 +15,10 @@ const defaultErrorFormatter: ErrorFormatter<any> = (result: any) => result;
 const defaultValidWhen: ValidWhen<any> = (result: any) => !result;
 const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
 
-interface ITriggerEvents {
-  onChange(field: IField<any>, inputValue?: string): void;
-  onFocus(field: IField<any>): void;
-  onBlur(field: IField<any>): void;
+interface ITriggerEvents<V = any> {
+  onChange(field: IField<V>, inputValue?: string | V): void;
+  onFocus(field: IField<V>): void;
+  onBlur(field: IField<V>): void;
 }
 
 export interface IValidationOptions {
@@ -109,8 +109,9 @@ export interface IField<V> extends IRulesOwner {
   readonly onFocus: () => void;
   readonly onBlur: () => void;
   readonly onChangeText: (inputValue: string) => void;
+  readonly onChangeValue: (inputValue: V) => void;
 
-  readonly events: ITriggerEvents;
+  readonly events: ITriggerEvents<V>;
 
   setValue(value: V): void;
   validate(): Promise<V | undefined>;
@@ -219,8 +220,13 @@ export class Field<V> implements IField<V> {
   }
 
   public readonly onChangeText = async (inputValue: string) => {
-    this.events.onChange(this);
+    this.events.onChange(this, inputValue);
     this.setInputValue(inputValue);
+  }
+
+  public readonly onChangeValue = async (inputValue: V) => {
+    this.events.onChange(this, inputValue);
+    this.setValue(inputValue);
   }
 
   @action
@@ -306,7 +312,7 @@ export class Form<T extends object> implements IForm<T> {
       const onChange = field.events.onChange;
       field.events.onChange = (f, v) => {
         onChange(f, v);
-        this.events.onChange(f);
+        this.events.onChange(f, v);
       };
 
       const onFocus = field.events.onFocus;

@@ -4,10 +4,10 @@ declare type ErrorFormatter<R> = (result: R) => ValidationError;
 declare type ValidWhen<R> = (result: R) => boolean;
 declare type ValueParser<V> = (inputValue?: string) => V | undefined;
 declare type ValueFormatter<V> = (value?: V) => string | undefined;
-interface ITriggerEvents {
-    onChange(field: IField<any>, inputValue?: string): void;
-    onFocus(field: IField<any>): void;
-    onBlur(field: IField<any>): void;
+interface ITriggerEvents<V = any> {
+    onChange(field: IField<V>, inputValue?: string | V): void;
+    onFocus(field: IField<V>): void;
+    onBlur(field: IField<V>): void;
 }
 export interface IValidationOptions {
     readonly events?: Partial<ITriggerEvents>;
@@ -47,7 +47,8 @@ export interface IField<V> extends IRulesOwner {
     readonly onFocus: () => void;
     readonly onBlur: () => void;
     readonly onChangeText: (inputValue: string) => void;
-    readonly events: ITriggerEvents;
+    readonly onChangeValue: (inputValue: V) => void;
+    readonly events: ITriggerEvents<V>;
     setValue(value: V): void;
     validate(): Promise<V | undefined>;
     setInputValue(inputValue?: string): void;
@@ -79,6 +80,7 @@ export declare class Field<V> implements IField<V> {
     clearErrors(): void;
     hideErrors(): void;
     readonly onChangeText: (inputValue: string) => Promise<void>;
+    readonly onChangeValue: (inputValue: V) => Promise<void>;
     readonly onFocus: () => void;
     readonly onBlur: () => void;
     setValueFormatter(fn: ValueFormatter<V>): void;

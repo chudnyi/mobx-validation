@@ -54,8 +54,12 @@ export class Field {
         this._errors = [];
         this._isErrorsVisible = false;
         this.onChangeText = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
-            this.events.onChange(this);
+            this.events.onChange(this, inputValue);
             this.setInputValue(inputValue);
+        });
+        this.onChangeValue = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
+            this.events.onChange(this, inputValue);
+            this.setValue(inputValue);
         });
         this.onFocus = () => {
             this.events.onFocus(this);
@@ -281,7 +285,7 @@ export class Form {
             const onChange = field.events.onChange;
             field.events.onChange = (f, v) => {
                 onChange(f, v);
-                this.events.onChange(f);
+                this.events.onChange(f, v);
             };
             const onFocus = field.events.onFocus;
             field.events.onFocus = (f) => {
