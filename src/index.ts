@@ -102,6 +102,10 @@ export interface IField<V> extends IRulesOwner {
   readonly value?: V;
   readonly formattedValue?: string;
   readonly isValid: boolean;
+  /**
+   * Признак редактирования пользователем.
+   */
+  readonly isDirty: boolean;
   readonly errors?: ValidationError[];
   readonly firstError?: ValidationError;
   readonly firstErrorAsArray?: [ValidationError];
@@ -126,6 +130,7 @@ export interface IField<V> extends IRulesOwner {
 export class Field<V> implements IField<V> {
   @observable.shallow public readonly rules: Array<IRule<any>> = [];
   public readonly events: ITriggerEvents;
+  @observable public isDirty: boolean = false;
   @observable private _inputValue?: string;
   @observable private _value?: V;
   // not valid by default
@@ -165,12 +170,14 @@ export class Field<V> implements IField<V> {
   public setInputValue(inputValue?: string) {
     this._inputValue = inputValue;
     this._recalculate({ value: true });
+    this.isDirty = false;
   }
 
   @action
   public setValue(value: V) {
     this._value = value;
     this._recalculate({ inputValue: true });
+    this.isDirty = false;
   }
 
   @computed
@@ -219,14 +226,18 @@ export class Field<V> implements IField<V> {
     this._isErrorsVisible = false;
   }
 
+  @action
   public readonly onChangeText = async (inputValue: string) => {
     this.events.onChange(this, inputValue);
     this.setInputValue(inputValue);
+    this.isDirty = true;
   }
 
+  @action
   public readonly onChangeValue = async (inputValue: V) => {
     this.events.onChange(this, inputValue);
     this.setValue(inputValue);
+    this.isDirty = true;
   }
 
   @action

@@ -1,6 +1,6 @@
 {
   "name": "mobx-validation",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Mobx based forms validation engine writen with TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,5 +32,8 @@
   },
   "peerDependencies": {
     "mobx": "*"
+  },
+  "dependencies": {
+    "mobx": "^5.1.1"
   }
 }

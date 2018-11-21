@@ -50,16 +50,19 @@ export class Rule {
 export class Field {
     constructor(options = defaultValidationOptions) {
         this.rules = [];
+        this.isDirty = false;
         // not valid by default
         this._errors = [];
         this._isErrorsVisible = false;
         this.onChangeText = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             this.events.onChange(this, inputValue);
             this.setInputValue(inputValue);
+            this.isDirty = true;
         });
         this.onChangeValue = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             this.events.onChange(this, inputValue);
             this.setValue(inputValue);
+            this.isDirty = true;
         });
         this.onFocus = () => {
             this.events.onFocus(this);
@@ -90,10 +93,12 @@ export class Field {
     setInputValue(inputValue) {
         this._inputValue = inputValue;
         this._recalculate({ value: true });
+        this.isDirty = false;
     }
     setValue(value) {
         this._value = value;
         this._recalculate({ inputValue: true });
+        this.isDirty = false;
     }
     get formattedValue() {
         return (this._formatter || defaultValueFormatter)(this.value);
@@ -172,6 +177,10 @@ tslib_1.__decorate([
     observable.shallow,
     tslib_1.__metadata("design:type", Array)
 ], Field.prototype, "rules", void 0);
+tslib_1.__decorate([
+    observable,
+    tslib_1.__metadata("design:type", Boolean)
+], Field.prototype, "isDirty", void 0);
 tslib_1.__decorate([
     observable,
     tslib_1.__metadata("design:type", String)
@@ -255,6 +264,14 @@ tslib_1.__decorate([
     tslib_1.__metadata("design:paramtypes", []),
     tslib_1.__metadata("design:returntype", void 0)
 ], Field.prototype, "hideErrors", null);
+tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Object)
+], Field.prototype, "onChangeText", void 0);
+tslib_1.__decorate([
+    action,
+    tslib_1.__metadata("design:type", Object)
+], Field.prototype, "onChangeValue", void 0);
 tslib_1.__decorate([
     action,
     tslib_1.__metadata("design:type", Object)
