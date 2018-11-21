@@ -41,6 +41,10 @@ export interface IField<V> extends IRulesOwner {
     readonly value?: V;
     readonly formattedValue?: string;
     readonly isValid: boolean;
+    /**
+     * Признак редактирования пользователем.
+     */
+    readonly isDirty: boolean;
     readonly errors?: ValidationError[];
     readonly firstError?: ValidationError;
     readonly firstErrorAsArray?: [ValidationError];
@@ -60,6 +64,7 @@ export interface IField<V> extends IRulesOwner {
 export declare class Field<V> implements IField<V> {
     readonly rules: Array<IRule<any>>;
     readonly events: ITriggerEvents;
+    isDirty: boolean;
     private _inputValue?;
     private _value?;
     private _errors?;
