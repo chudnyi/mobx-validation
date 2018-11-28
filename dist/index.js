@@ -55,14 +55,14 @@ export class Field {
         this._errors = [];
         this._isErrorsVisible = false;
         this.onChangeText = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
-            this.events.onChange(this, inputValue);
             this.setInputValue(inputValue);
             this.isDirty = true;
+            this.events.onChange(this, inputValue);
         });
         this.onChangeValue = (inputValue) => tslib_1.__awaiter(this, void 0, void 0, function* () {
-            this.events.onChange(this, inputValue);
             this.setValue(inputValue);
             this.isDirty = true;
+            this.events.onChange(this, inputValue);
         });
         this.onFocus = () => {
             this.events.onFocus(this);

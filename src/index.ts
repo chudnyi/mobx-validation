@@ -228,16 +228,16 @@ export class Field<V> implements IField<V> {
 
   @action
   public readonly onChangeText = async (inputValue: string) => {
-    this.events.onChange(this, inputValue);
     this.setInputValue(inputValue);
     this.isDirty = true;
+    this.events.onChange(this, inputValue);
   }
 
   @action
   public readonly onChangeValue = async (inputValue: V) => {
-    this.events.onChange(this, inputValue);
     this.setValue(inputValue);
     this.isDirty = true;
+    this.events.onChange(this, inputValue);
   }
 
   @action
