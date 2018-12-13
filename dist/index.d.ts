@@ -1,98 +1,75 @@
 declare type ValidationError = string;
-declare type Validation<R> = (inputValue: any) => R | Promise<R>;
-declare type ErrorFormatter<R> = (result: R) => ValidationError;
-declare type ValidWhen<R> = (result: R) => boolean;
-declare type ValueParser<V> = (inputValue?: string) => V | undefined;
-declare type ValueFormatter<V> = (value?: V) => string | undefined;
-interface ITriggerEvents<V = any> {
-    onChange(field: IField<V>, inputValue?: string | V): void;
-    onFocus(field: IField<V>): void;
-    onBlur(field: IField<V>): void;
+declare enum InputEventEnum {
+    init = "init",
+    focus = "focus",
+    changing = "changing",
+    changed = "changed",
+    blur = "blur"
 }
-export interface IValidationOptions {
-    readonly events?: Partial<ITriggerEvents>;
+export declare type InputEventType = keyof typeof InputEventEnum;
+export interface FieldEvent<V = any, IN = V, E = ValidationError> {
+    eventType: InputEventType;
+    field: IField<V, IN, E>;
 }
-declare type IValidationOptionsValues = {
-    [P in keyof IValidationOptions]-?: IValidationOptions[P];
-};
-export declare const defaultValidationOptions: IValidationOptionsValues;
-interface IRule<R> {
-    readonly validation: Validation<R>;
-    validWhen(fn: ValidWhen<R>): IRule<R>;
-    validWhen(): ValidWhen<R>;
-    formatter(fn: ErrorFormatter<R>): IRule<R>;
-    formatter(): ErrorFormatter<R>;
-}
-export declare class Rule<R> implements IRule<R> {
-    readonly validation: Validation<R>;
-    private _formatter;
-    private _validWhen;
-    constructor(validation: Validation<R>);
-    formatter(): ErrorFormatter<R>;
-    formatter(fn: ErrorFormatter<R>): IRule<R>;
-    validWhen(): ValidWhen<R>;
-    validWhen(fn: ValidWhen<R>): IRule<R>;
-}
-interface IRulesOwner {
-    readonly rules: Array<IRule<any>>;
-}
-export interface IField<V> extends IRulesOwner {
-    readonly inputValue?: string;
+export interface IField<V, IN = V, E = ValidationError> {
+    readonly inputValue?: IN;
     readonly value?: V;
-    readonly formattedValue?: string;
+    readonly inputOrValue?: IN | V;
     readonly isValid: boolean;
+    readonly isValidating: boolean;
     /**
      * Признак редактирования пользователем.
      */
     readonly isDirty: boolean;
-    readonly errors?: ValidationError[];
-    readonly firstError?: ValidationError;
-    readonly firstErrorAsArray?: [ValidationError];
+    readonly errors?: E[];
     readonly onFocus: () => void;
     readonly onBlur: () => void;
-    readonly onChangeText: (inputValue: string) => void;
-    readonly onChangeValue: (inputValue: V) => void;
-    readonly events: ITriggerEvents<V>;
+    readonly onChange: (inputValue: IN) => void;
     setValue(value: V): void;
-    validate(): Promise<V | undefined>;
-    setInputValue(inputValue?: string): void;
+    showErrors(): void;
     clearErrors(): void;
     hideErrors(): void;
-    setValueParser(fn: ValueParser<V>): void;
-    setValueFormatter(fn: ValueFormatter<V>): void;
+    setValidator(createValidator: () => (args: {
+        input?: IN;
+        value?: V;
+        inputOrValue?: IN | V;
+    }) => AsyncIterableIterator<E | undefined>): void;
+    setEventHandler(handler: (event: FieldEvent<V, IN, E>) => void): void;
 }
-export declare class Field<V> implements IField<V> {
-    readonly rules: Array<IRule<any>>;
-    readonly events: ITriggerEvents;
+export declare class Field<V, IN = V, E = ValidationError> implements IField<V, IN, E> {
     isDirty: boolean;
+    isValidating: boolean;
     private _inputValue?;
     private _value?;
     private _errors?;
     private _isErrorsVisible;
-    private _parser?;
-    private _formatter?;
-    constructor(options?: IValidationOptions);
-    readonly inputValue: string | undefined;
+    private _validationIteratorFactoryFactory?;
+    private _eventHandler;
+    constructor();
+    setValidator(createValidator: () => (args: {
+        input?: IN;
+        value?: V;
+        inputOrValue?: IN | V;
+    }) => AsyncIterableIterator<E | undefined>): void;
+    readonly inputValue: IN | undefined;
     readonly value: V | undefined;
-    setInputValue(inputValue?: string): void;
+    readonly inputOrValue: IN | V | undefined;
     setValue(value: V): void;
-    readonly formattedValue: string | undefined;
     readonly isValid: boolean;
-    readonly errors: ValidationError[] | undefined;
-    readonly firstError: ValidationError | undefined;
-    readonly firstErrorAsArray: [ValidationError] | undefined;
-    validate(): Promise<V | undefined>;
+    readonly errors: E[] | undefined;
+    showErrors(): void;
     clearErrors(): void;
     hideErrors(): void;
-    readonly onChangeText: (inputValue: string) => Promise<void>;
-    readonly onChangeValue: (inputValue: V) => Promise<void>;
+    readonly onChange: (inputValue: IN) => void;
     readonly onFocus: () => void;
     readonly onBlur: () => void;
-    setValueFormatter(fn: ValueFormatter<V>): void;
-    setValueParser(fn: ValueParser<V>): void;
+    setEventHandler(handler: (event: FieldEvent<V, IN, E>) => void): void;
+    private readonly _validationIteratorFactory;
+    private _setInputValue;
+    private _setValue;
     private _setErrors;
-    private _recalculate;
-    private _validateRules;
+    private _emitEvent;
+    private _hideErrorsIfNoErrors;
 }
 declare type IFormFields<T extends object> = {
     [P in keyof T]: IField<T[P]>;
@@ -100,24 +77,16 @@ declare type IFormFields<T extends object> = {
 export interface IForm<T extends object> {
     readonly fields: IFormFields<T>;
     readonly isValid: boolean;
-    readonly events: ITriggerEvents;
-    validate(): Promise<T | undefined>;
-    validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
+    readonly values?: T;
     setFields(fields: IFormFields<T>): void;
     setValues(values: Partial<T>, clear?: boolean): void;
 }
 export declare class Form<T extends object> implements IForm<T> {
-    readonly events: ITriggerEvents;
     private _fields?;
     setFields(fields: IFormFields<T>): void;
     readonly fields: IFormFields<T>;
     readonly isValid: boolean;
-    validatePartial(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
-    validate(): Promise<T | undefined>;
-    validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
+    readonly values: any;
     setValues(values: Partial<T>, clear?: boolean): void;
-}
-export declare class StringField extends Field<string> {
-    constructor(options?: IValidationOptions);
 }
 export {};

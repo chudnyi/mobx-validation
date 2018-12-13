@@ -1,163 +1,182 @@
-import { action, autorun, computed, observable, untracked } from 'mobx';
+import { action, computed, observable, reaction, IReactionDisposer } from 'mobx';
+import { whenObserved } from './whenObserved.helper';
 
-// R - Result of validation
 // V - Type of validated value
-// T - Type of interface with form fields
+// IN - Type of input value (default: same as V)
+// E - Type of validation error (default: string)
 
 type ValidationError = string;
-type Validation<R> = (inputValue: any) => R | Promise<R>;
-type ErrorFormatter<R> = (result: R) => ValidationError;
-type ValidWhen<R> = (result: R) => boolean;
-type ValueParser<V> = (inputValue?: string) => V | undefined;
-type ValueFormatter<V> = (value?: V) => string | undefined;
 
-const defaultErrorFormatter: ErrorFormatter<any> = (result: any) => result;
-const defaultValidWhen: ValidWhen<any> = (result: any) => !result;
-const defaultValueFormatter: ValueFormatter<any> = value => value ? value.toString() : undefined;
-
-interface ITriggerEvents<V = any> {
-  onChange(field: IField<V>, inputValue?: string | V): void;
-  onFocus(field: IField<V>): void;
-  onBlur(field: IField<V>): void;
+enum InputEventEnum {
+  init = 'init',
+  focus = 'focus',
+  changing = 'changing',
+  changed = 'changed',
+  blur = 'blur'
 }
 
-export interface IValidationOptions {
-  readonly events?: Partial<ITriggerEvents>;
+export type InputEventType = keyof typeof InputEventEnum;
+
+export interface FieldEvent<V = any, IN = V, E = ValidationError> {
+  eventType: InputEventType;
+  field: IField<V, IN, E>;
 }
 
-type IValidationOptionsValues = { [P in keyof IValidationOptions]-?: IValidationOptions[P] };
-
-const defaultFieldEvents: ITriggerEvents = {
-  onChange: (field, inputValue) => {
-    field.hideErrors();
-  },
-  onFocus: field => {
-    // empty
-  },
-  onBlur: field => {
-    field.validate().then();
-  }
-};
-
-const defaultFormEvents: ITriggerEvents = {
-  onChange: (field, inputValue) => {
-    // empty
-  },
-  onFocus: field => {
-    // empty
-  },
-  onBlur: field => {
-    // empty
-  }
-};
-
-export const defaultValidationOptions: IValidationOptionsValues = {
-  events: defaultFieldEvents
-};
-
-interface IRule<R> {
-  readonly validation: Validation<R>;
-  validWhen(fn: ValidWhen<R>): IRule<R>;
-  validWhen(): ValidWhen<R>;
-  formatter(fn: ErrorFormatter<R>): IRule<R>;
-  formatter(): ErrorFormatter<R>;
-}
-
-export class Rule<R> implements IRule<R> {
-  public readonly validation: Validation<R>;
-  private _formatter: ErrorFormatter<R> | undefined;
-  private _validWhen: ValidWhen<R> | undefined;
-
-  constructor(validation: Validation<R>) {
-    this.validation = validation;
-  }
-
-  public formatter(): ErrorFormatter<R>;
-  public formatter(fn: ErrorFormatter<R>): IRule<R>;
-  public formatter(fn?: ErrorFormatter<R>): any {
-    if (!fn) {
-      return this._formatter || defaultErrorFormatter;
-    }
-    this._formatter = fn;
-    return this;
-  }
-
-  public validWhen(): ValidWhen<R>;
-  public validWhen(fn: ValidWhen<R>): IRule<R>;
-  public validWhen(fn?: ValidWhen<R>): any {
-    if (!fn) {
-      return this._validWhen || defaultValidWhen;
-    }
-    this._validWhen = fn;
-    return this;
-  }
-}
-
-interface IRulesOwner {
-  readonly rules: Array<IRule<any>>;
-}
-
-export interface IField<V> extends IRulesOwner {
-  readonly inputValue?: string;
+export interface IField<V, IN = V, E = ValidationError> {
+  readonly inputValue?: IN;
   readonly value?: V;
-  readonly formattedValue?: string;
+  readonly inputOrValue?: IN | V;
   readonly isValid: boolean;
+  readonly isValidating: boolean;
   /**
    * Признак редактирования пользователем.
    */
   readonly isDirty: boolean;
-  readonly errors?: ValidationError[];
-  readonly firstError?: ValidationError;
-  readonly firstErrorAsArray?: [ValidationError];
+  readonly errors?: E[];
 
   readonly onFocus: () => void;
   readonly onBlur: () => void;
-  readonly onChangeText: (inputValue: string) => void;
-  readonly onChangeValue: (inputValue: V) => void;
-
-  readonly events: ITriggerEvents<V>;
+  readonly onChange: (inputValue: IN) => void;
 
   setValue(value: V): void;
-  validate(): Promise<V | undefined>;
-  setInputValue(inputValue?: string): void;
+  showErrors(): void;
   clearErrors(): void;
   hideErrors(): void;
 
-  setValueParser(fn: ValueParser<V>): void;
-  setValueFormatter(fn: ValueFormatter<V>): void;
+  setValidator(createValidator: () => (args: { input?: IN, value?: V, inputOrValue?: IN | V }) => AsyncIterableIterator<E | undefined>): void;
+  setEventHandler(handler: (event: FieldEvent<V, IN, E>) => void): void;
 }
 
-export class Field<V> implements IField<V> {
-  @observable.shallow public readonly rules: Array<IRule<any>> = [];
-  public readonly events: ITriggerEvents;
+export class Field<V, IN = V, E = ValidationError> implements IField<V, IN, E> {
   @observable public isDirty: boolean = false;
-  @observable private _inputValue?: string;
-  @observable private _value?: V;
-  // not valid by default
-  @observable private _errors?: ValidationError[] = [];
+  @observable public isValidating: boolean = false;
+  @observable.ref private _inputValue?: IN;
+  @observable.ref private _value?: V;
+  @observable private _errors?: E[] = [];
   @observable private _isErrorsVisible: boolean = false;
-  @observable.ref private _parser?: ValueParser<V>;
-  @observable.ref private _formatter?: ValueFormatter<V>;
+  @observable.ref private _validationIteratorFactoryFactory?:
+    () => (args: { input?: IN, value?: V, inputOrValue?: IN | V }) => AsyncIterableIterator<E | undefined>;
+  private _eventHandler: (event: FieldEvent<V, IN, E>) => void;
 
-  constructor(options: IValidationOptions = defaultValidationOptions) {
-    // @ts-ignore
-    this.events = { ...defaultValidationOptions.events, ...options.events };
+  constructor() {
+    this._eventHandler = () => { /*do nothing*/ };
+    this._validationIteratorFactoryFactory = () => {
+      // noinspection TsLint
+      return async function* ({ inputOrValue }) {
+        return inputOrValue as any;
+      };
+    };
 
-    let skipFist = true;
-    autorun(async () => {
-      const inputValue = untracked(() => this._inputValue);
-      const errors = await this._validateRules(inputValue);
+    // 2 - потому, что в reaction подписка на 2 своих поля
+    const disposeCount = 2;
+    let observeCounter = 0;
+    let reactionDisposer: IReactionDisposer | undefined;
+    whenObserved(
+      this,
+      ['inputValue', 'value', 'inputOrValue', 'isValid', 'isValidating', 'errors'],
+      () => {
+        observeCounter++;
 
-      if (skipFist) {
-        skipFist = false;
-      } else {
-        this._setErrors(errors);
-      }
-    });
+        // при первой подписке из-вне, создаём reaction, который будет отвечать за вализацию
+        if (observeCounter === 1) {
+          let checkCounter = 0;
+          reactionDisposer = reaction(
+            () => ({
+              // Подписка на свои поля определяет значение disposeCount
+              inputValue: this.inputValue, value: this.value,
+              validationIteratorFactory: this._validationIteratorFactory
+            }),
+            async ({ inputValue: _inputValue, value: _value, validationIteratorFactory }) => {
+              if (validationIteratorFactory) {
+                const iteratorIndex = ++checkCounter;
+                const errors: E[] = [];
+                const iterable = validationIteratorFactory({ input: _inputValue, value: _value, inputOrValue: this.inputOrValue });
+                let isObsolete;
+                let validValue: V | undefined;
+
+                this._setErrors(errors, true);
+
+                while (true) {
+                  let value;
+                  let done;
+                  try {
+                    const item = await iterable.next();
+                    value = item.value;
+                    done = item.done;
+                  } catch (error) {
+                    // TODO: Что делать, если тип ошибки E - не строка?
+                    value = error.message;
+                    done = false;
+                  }
+
+                  isObsolete = iteratorIndex !== checkCounter;
+                  const isError = !done && value !== undefined;
+                  const isNothing = !done && value === undefined;
+                  const isValidValue = done && value !== undefined;
+
+                  if (isObsolete) {
+                    break;
+                  }
+                  if (isNothing) {
+                    continue;
+                  }
+
+                  if (isError) {
+                    errors.push(value);
+                    this._setErrors(errors);
+                  }
+
+                  if (isValidValue) {
+                    validValue = value;
+                  }
+                  if (done) {
+                    break;
+                  }
+                }
+
+                isObsolete = iteratorIndex !== checkCounter;
+                if (!isObsolete) {
+                  this._setErrors(errors, false);
+
+                  if (validValue !== undefined) {
+                    this._setValue(validValue);
+                  }
+                }
+
+                if (checkCounter === 1) {
+                  this._emitEvent('init');
+                }
+
+                this._hideErrorsIfNoErrors();
+                this._emitEvent('changed');
+              }
+            },
+            { fireImmediately: true });
+        }
+
+        return reactionDisposer;
+      },
+      () => {
+        observeCounter--;
+
+        // при последней отпписке из-вне, убиваем reaction, чтобы небыло утечек памяти
+        if (observeCounter === disposeCount) {
+          if (reactionDisposer) {
+            reactionDisposer();
+            reactionDisposer = undefined;
+          }
+        }
+      });
+  }
+
+  @action
+  public setValidator(createValidator: () => (args: { input?: IN, value?: V, inputOrValue?: IN | V }) => AsyncIterableIterator<E | undefined>): void {
+    this._setErrors([], true);
+    this._validationIteratorFactoryFactory = createValidator;
   }
 
   @computed
-  public get inputValue(): string | undefined {
+  public get inputValue(): IN | undefined {
     return this._inputValue;
   }
 
@@ -166,53 +185,33 @@ export class Field<V> implements IField<V> {
     return this._value;
   }
 
-  @action
-  public setInputValue(inputValue?: string) {
-    this._inputValue = inputValue;
-    this._recalculate({ value: true });
-    this.isDirty = false;
+  @computed
+  public get inputOrValue(): IN | V | undefined {
+    return this._inputValue !== undefined ? this._inputValue : this._value;
   }
 
   @action
   public setValue(value: V) {
-    this._value = value;
-    this._recalculate({ inputValue: true });
+    this._emitEvent('changing');
+    this._inputValue = undefined;
+    this._setValue(value);
     this.isDirty = false;
-  }
-
-  @computed
-  public get formattedValue(): string | undefined {
-    return (this._formatter || defaultValueFormatter)(this.value);
+    this.isValidating = false;
   }
 
   @computed
   public get isValid(): boolean {
-    // valid only if errors === undefined
-    // if errors = [] - not valid (by default)
-    return !this._errors;
+    return (!this._errors || !this._errors.length) && !this.isValidating;
   }
 
   @computed
-  public get errors(): ValidationError[] | undefined {
-    // never populate errors === [] - only for internal logic
+  public get errors(): E[] | undefined {
     return this._isErrorsVisible && this._errors && this._errors.length ? this._errors : undefined;
   }
 
-  @computed
-  public get firstError(): ValidationError | undefined {
-    return this._errors && this._errors.length ? this._errors[0] : undefined;
-  }
-
-  @computed
-  public get firstErrorAsArray(): [ValidationError] | undefined {
-    return this._errors && this._errors.length ? [this._errors[0]] : undefined;
-  }
-
-  public async validate(): Promise<V | undefined> {
-    const errors = await this._validateRules(this._inputValue);
-    this._setErrors(errors);
-
-    return this.isValid ? this.value : undefined;
+  @action
+  public showErrors(): void {
+    this._isErrorsVisible = true;
   }
 
   @action
@@ -227,75 +226,62 @@ export class Field<V> implements IField<V> {
   }
 
   @action
-  public readonly onChangeText = async (inputValue: string) => {
-    this.setInputValue(inputValue);
+  public readonly onChange = (inputValue: IN) => {
+    this._emitEvent('changing');
+    this._setInputValue(inputValue);
     this.isDirty = true;
-    this.events.onChange(this, inputValue);
-  }
-
-  @action
-  public readonly onChangeValue = async (inputValue: V) => {
-    this.setValue(inputValue);
-    this.isDirty = true;
-    this.events.onChange(this, inputValue);
   }
 
   @action
   public readonly onFocus = (): void => {
-    this.events.onFocus(this);
+    this._emitEvent('focus');
   }
 
   @action
   public readonly onBlur = (): void => {
-    this.events.onBlur(this);
+    this._emitEvent('blur');
   }
 
-  public setValueFormatter(fn: ValueFormatter<V>): void {
-    this._formatter = fn;
+  public setEventHandler(handler: (event: FieldEvent<V, IN, E>) => void): void {
+    this._eventHandler = handler;
   }
 
-  public setValueParser(fn: ValueParser<V>): void {
-    this._parser = fn;
+  @computed
+  private get _validationIteratorFactory() {
+    return this._validationIteratorFactoryFactory ? this._validationIteratorFactoryFactory() : undefined;
   }
 
   @action
-  private _setErrors(errors?: ValidationError[]) {
+  private _setInputValue(inputValue?: IN) {
+    this._inputValue = inputValue;
+    this._value = undefined;
+    this.isDirty = false;
+  }
+
+  @action
+  private _setValue(value: V) {
+    this._value = value;
+  }
+
+  @action
+  private _setErrors(errors: E[], isValidating?: boolean) {
     this._errors = errors;
-    this._isErrorsVisible = true;
+    if (isValidating !== undefined) {
+      this.isValidating = isValidating;
+    }
   }
 
   @action
-  private _recalculate(dirty: { value?: boolean, inputValue?: boolean }) {
-    if (dirty.inputValue) {
-      this._inputValue = this.formattedValue;
-    }
-
-    if (dirty.value) {
-      if (!this._parser) {
-        throw new Error('FormField::parsedValue Use parser for input value. Use setValueParser');
-      }
-
-      this._value = this._parser!(this._inputValue);
-    }
+  private _emitEvent(eventType: InputEventType) {
+    this._eventHandler({ eventType, field: this });
   }
 
-  private async _validateRules(inputValue: any): Promise<ValidationError[] | undefined> {
-    let errors: ValidationError[] | undefined;
-    const promises = this.rules.map(v => v.validation(inputValue));
-    const results = await Promise.all(promises);
-    results.forEach((result, index) => {
-      const v = this.rules[index];
-      const isValid = v.validWhen()(result);
-      if (!isValid) {
-        const error = v.formatter()(result);
-        if (!errors) {
-          errors = [];
-        }
-        errors.push(error);
-      }
-    });
-
-    return errors;
+  @action
+  private _hideErrorsIfNoErrors() {
+    const noErrors = !this._errors || this._errors.length === 0;
+    if (noErrors) {
+      this.hideErrors();
+    }
   }
 }
 
@@ -304,48 +290,23 @@ type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
 export interface IForm<T extends object> {
   readonly fields: IFormFields<T>;
   readonly isValid: boolean;
-  readonly events: ITriggerEvents;
-
-  validate(): Promise<T | undefined>;
-  validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
+  // return all valid values or undefined
+  readonly values?: T;
   setFields(fields: IFormFields<T>): void;
   setValues(values: Partial<T>, clear?: boolean): void;
 }
 
 export class Form<T extends object> implements IForm<T> {
-  public readonly events: ITriggerEvents = { ...defaultFormEvents };
   private _fields?: IFormFields<T>;
 
   public setFields(fields: IFormFields<T>): void {
-    forEach(fields, (field: IField<any>) => {
-      field.clearErrors();
-
-      const onChange = field.events.onChange;
-      field.events.onChange = (f, v) => {
-        onChange(f, v);
-        this.events.onChange(f, v);
-      };
-
-      const onFocus = field.events.onFocus;
-      field.events.onFocus = (f) => {
-        onFocus(f);
-        this.events.onFocus(f);
-      };
-
-      const onBlur = field.events.onBlur;
-      field.events.onBlur = (f) => {
-        onBlur(f);
-        this.events.onBlur(f);
-      };
-    });
-
     this._fields = fields;
   }
 
   @computed
   public get fields() {
     if (!this._fields) {
-      throw new Error('FormField::fields Not specified FormValidator fields. Use setFields');
+      throw new Error('FormField::fields Not specified Form fields. Use setFields');
     }
     return this._fields;
   }
@@ -364,47 +325,17 @@ export class Form<T extends object> implements IForm<T> {
     return true;
   }
 
-  public async validatePartial(...fields: Array<keyof T>): Promise<Partial<T> | undefined> {
-    if (!fields || !fields.length) {
-      fields = [...Object.keys(this.fields)] as Array<keyof T>;
+  @computed
+  public get values() {
+    if (!this.isValid) {
+      return undefined;
     }
 
-    const promises = fields.map(field => this.fields[field].validate());
-    const values = await Promise.all(promises);
-    let result: Partial<T> | undefined;
-    fields.forEach((field, index) => {
-      if (this.fields[field].isValid) {
-        if (!result) {
-          result = {};
-        }
-        result[field] = values[index];
-      }
+    const result: any = {};
+    Object.keys(this.fields).forEach(key => {
+      const field = (this.fields as any)[key];
+      result[key] = field.value;
     });
-
-    return result;
-  }
-
-  public validate(): Promise<T | undefined>;
-  public validate(...fields: Array<keyof T>): Promise<Partial<T> | undefined>;
-  public async validate(...fields: Array<keyof T>): Promise<any> {
-    if (!fields || !fields.length) {
-      fields = [...Object.keys(this.fields)] as Array<keyof T>;
-    }
-
-    const promises = fields.map(field => this.fields[field].validate());
-    const values = await Promise.all(promises);
-    let result: Partial<T> | undefined;
-    for (let index = 0; index < fields.length; index++) {
-      const field = fields[index];
-      if (!this.fields[field].isValid) {
-        return undefined;
-      } else {
-        if (!result) {
-          result = {};
-        }
-        result[field] = values[index];
-      }
-    }
 
     return result;
   }
@@ -418,21 +349,6 @@ export class Form<T extends object> implements IForm<T> {
           field.setValue(value);
         }
       }
-    }
-  }
-}
-
-export class StringField extends Field<string> {
-  constructor(options: IValidationOptions = defaultValidationOptions) {
-    super(options);
-    this.setValueParser(s => s);
-  }
-}
-
-function forEach<T extends object>(obj: T, cb: (value: any, key?: keyof T) => void) {
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      cb(obj[key], key);
     }
   }
 }
