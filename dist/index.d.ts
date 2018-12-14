@@ -72,7 +72,7 @@ export declare class Field<V, IN = V, E = ValidationError> implements IField<V, 
     private _hideErrorsIfNoErrors;
 }
 declare type IFormFields<T extends object> = {
-    [P in keyof T]: IField<T[P]>;
+    [P in keyof T]: IField<T[P], any, any>;
 };
 export interface IForm<T extends object> {
     readonly fields: IFormFields<T>;

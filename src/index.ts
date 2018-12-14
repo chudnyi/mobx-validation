@@ -285,7 +285,7 @@ export class Field<V, IN = V, E = ValidationError> implements IField<V, IN, E> {
   }
 }
 
-type IFormFields<T extends object> = { [P in keyof T]: IField<T[P]> };
+type IFormFields<T extends object> = { [P in keyof T]: IField<T[P], any, any> };
 
 export interface IForm<T extends object> {
   readonly fields: IFormFields<T>;
